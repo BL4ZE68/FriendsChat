@@ -60,7 +60,7 @@ The app will open at `http://localhost:3000`
 ## 📱 Future Enhancements
 
 - [ ] Video/Audio calling
-- [ ] File sharing
+- [x] File sharing (Supabase Storage)
 - [ ] Message reactions
 - [ ] Voice messages
 - [ ] Message search
@@ -68,8 +68,8 @@ The app will open at `http://localhost:3000`
 - [ ] Message encryption
 - [ ] Dark mode
 - [ ] React Native mobile app
-- [ ] Backend API integration
-- [ ] Database persistence
+- [x] Backend API integration (Supabase)
+- [x] Database persistence (Supabase)
 
 ## 🎨 Design Features
 

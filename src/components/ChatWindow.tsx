@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Paperclip, Smile, Phone, Video, Info } from 'lucide-react';
 import { useChatStore, useAuthStore, Message } from '../store';
@@ -9,6 +9,12 @@ export const ChatWindow: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { selectedConversation, addMessage } = useChatStore();
   const { user } = useAuthStore();
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll to latest message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [selectedConversation?.messages.length]);
 
   const handleSend = async () => {
     if (!message.trim() || !selectedConversation || !user) return;
@@ -31,7 +37,7 @@ export const ChatWindow: React.FC = () => {
       }
     } else {
       const newMessage: Message = {
-        id: Math.random().toString(),
+        id: crypto.randomUUID(),
         conversationId: selectedConversation.id,
         senderId: user.id,
         senderName: user.name,
@@ -60,9 +66,9 @@ export const ChatWindow: React.FC = () => {
     }
 
     const filePath = `${selectedConversation.id}/${Date.now()}_${file.name}`;
-    const { data, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('uploads')
-      .upload(filePath, file as any, { cacheControl: '3600', upsert: false });
+      .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
     if (uploadError) {
       console.error('upload err', uploadError);
@@ -106,7 +112,7 @@ export const ChatWindow: React.FC = () => {
       >
         <div className="flex items-center gap-3">
           <img
-            src={selectedConversation.avatar || selectedConversation.members[0]?.avatar}
+            src={selectedConversation.avatar || selectedConversation.members[0]?.avatar || 'https://api.dicebear.com/7.x/shapes/svg?seed=chat'}
             alt={selectedConversation.name}
             className="w-10 h-10 rounded-full"
           />
@@ -145,7 +151,7 @@ export const ChatWindow: React.FC = () => {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <AnimatePresence>
-          {selectedConversation.messages.map((msg, idx) => (
+          {selectedConversation.messages.map((msg) => (
             <motion.div
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
@@ -181,6 +187,7 @@ export const ChatWindow: React.FC = () => {
             </motion.div>
           ))}
         </AnimatePresence>
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
@@ -203,7 +210,7 @@ export const ChatWindow: React.FC = () => {
             type="text"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Type a message..."
             className="flex-1 px-4 py-2 bg-white/60 border border-white/30 rounded-full text-gray-800 placeholder-gray-500 focus:outline-none focus:bg-white/80 transition"
           />

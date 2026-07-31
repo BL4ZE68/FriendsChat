@@ -1,14 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { AuthPage } from './components/AuthPage';
 import { ConversationList } from './components/ConversationList';
 import { ChatWindow } from './components/ChatWindow';
 import { CreateConversationModal } from './components/CreateConversationModal';
-import { useAuthStore, useChatStore, User, Message } from './store';
+import DirectChatModal from './components/DirectChatModal';
+import { useAuthStore, useChatStore, User, Message, loadConversationsForUser, subscribeToMessages, fetchMessagesForConversation, createConversationWithUser } from './store';
 
 function App() {
   const { user, isAuthenticated, logout } = useAuthStore();
-  const { conversations, addConversation, setActiveConversation } = useChatStore();
+  const { conversations, addConversation, setActiveConversation, activeConversationId } = useChatStore() as any;
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDirectOpen, setIsDirectOpen] = useState(false);
+
+  // Load conversations and subscribe to realtime when authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      loadConversationsForUser(user.id).catch((err) => console.error(err));
+      subscribeToMessages();
+    }
+  }, [isAuthenticated, user]);
+
+  // When active conversation changes, fetch its messages
+  useEffect(() => {
+    if (activeConversationId) {
+      fetchMessagesForConversation(activeConversationId).catch((err) => console.error(err));
+    }
+  }, [activeConversationId]);
 
   useEffect(() => {
     if (isAuthenticated && conversations.length === 0) {
@@ -56,13 +73,14 @@ function App() {
             isRead: false
           }
         ] as Message[],
-        avatar: '🌍',
+        avatar: 'https://api.dicebear.com/7.x/shapes/svg?seed=world-crew',
         isGroup: true
       };
 
       addConversation(mockConversation);
       setActiveConversation('1');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   const handleCreateConversation = (name: string, memberIds: string[]) => {
@@ -88,9 +106,24 @@ function App() {
     return <AuthPage />;
   }
 
+  const handleDirectCreate = async (partnerId: string, partnerName?: string, partnerEmail?: string) => {
+    if (!user) return;
+    await createConversationWithUser({
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      userAvatar: user.avatar,
+      partnerId,
+      partnerName,
+      partnerEmail,
+      name: partnerName || 'Direct Chat'
+    });
+    setIsDirectOpen(false);
+  };
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-purple-200/30 via-pink-200/30 to-red-200/30">
-      <ConversationList onLogout={() => logout()} />
+      <ConversationList onLogout={() => logout()} onNewConversation={() => setIsModalOpen(true)} onDirectStart={() => setIsDirectOpen(true)} />
       <div className="flex-1 flex flex-col">
         <ChatWindow />
       </div>
@@ -99,6 +132,7 @@ function App() {
         onClose={() => setIsModalOpen(false)}
         onCreate={handleCreateConversation}
       />
+      <DirectChatModal isOpen={isDirectOpen} onClose={() => setIsDirectOpen(false)} onCreate={handleDirectCreate} />
     </div>
   );
 }

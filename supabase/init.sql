@@ -29,19 +29,42 @@ create table if not exists messages (
 
 create index if not exists messages_conversation_idx on messages(conversation_id, inserted_at desc);
 
--- Basic Row Level Security (RLS) policies
--- NOTE: these are permissive; adjust for your app's security model.
+-- Conversation members (store minimal profile snapshot for each member)
+create table if not exists conversation_members (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid references conversations(id) on delete cascade,
+  user_id uuid,
+  user_name text,
+  user_email text,
+  user_avatar text,
+  created_at timestamptz default now()
+);
+
+-- Row Level Security (RLS) policies
+-- NOTE: SELECT policies are permissive for development. Once the app properly
+-- manages conversation_members rows, tighten SELECT to check membership.
 
 alter table messages enable row level security;
 create policy "allow_authenticated_select" on messages
   for select using (auth.role() = 'authenticated');
-
 create policy "allow_authenticated_insert" on messages
   for insert with check (auth.role() = 'authenticated' and (sender_id = auth.uid() or sender_id is null));
 
 alter table conversations enable row level security;
-create policy "allow_authenticated_conversations" on conversations
+create policy "allow_authenticated_select_conversations" on conversations
   for select using (auth.role() = 'authenticated');
+create policy "allow_authenticated_insert_conversations" on conversations
+  for insert with check (auth.role() = 'authenticated');
+
+alter table conversation_members enable row level security;
+create policy "allow_authenticated_select_members" on conversation_members
+  for select using (auth.role() = 'authenticated');
+create policy "allow_authenticated_insert_members" on conversation_members
+  for insert with check (auth.role() = 'authenticated');
+
+-- Realtime: enable the messages table so INSERT events are broadcast to clients.
+-- In Supabase Dashboard > Database > Replication, toggle "messages" on.
+-- Or run: alter publication supabase_realtime add table messages;
 
 -- Example seed: a public test conversation
 insert into conversations (id, name, is_group) values
@@ -55,4 +78,5 @@ on conflict do nothing;
 -- Guidance:
 -- 1) Create a storage bucket named 'uploads' in Supabase > Storage for file uploads.
 -- 2) Configure CORS/Policies as needed for your application.
--- 3) Improve RLS policies to restrict access to conversation members only.
+-- 3) Tighten RLS policies to restrict SELECT to conversation members once
+--    the app populates conversation_members on conversation creation.

@@ -1,13 +1,15 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { MessageCircle, Plus, LogOut } from 'lucide-react';
-import { useChatStore, useAuthStore, Conversation } from '../store';
+import { useChatStore, useAuthStore } from '../store';
 
 interface ConversationListProps {
   onLogout: () => void;
+  onNewConversation: () => void;
+  onDirectStart?: () => void;
 }
 
-export const ConversationList: React.FC<ConversationListProps> = ({ onLogout }) => {
+export const ConversationList: React.FC<ConversationListProps> = ({ onLogout, onNewConversation, onDirectStart }) => {
   const { conversations, activeConversationId, setActiveConversation } = useChatStore();
   const { user } = useAuthStore();
 
@@ -21,13 +23,26 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onLogout }) 
       <motion.div className="p-4 border-b border-white/20">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold text-gray-800">FriendsChat</h1>
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            className="p-2 bg-gradient-to-r from-purple-400 to-pink-400 text-white rounded-lg"
-          >
-            <Plus size={20} />
-          </motion.button>
+          <div className="flex items-center gap-2">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={onNewConversation}
+              title="Create conversation"
+              className="p-2 bg-gradient-to-r from-purple-400 to-pink-400 text-white rounded-lg"
+            >
+              <Plus size={20} />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={onDirectStart}
+              title="New direct chat"
+              className="p-2 bg-white/10 text-white rounded-lg border border-white/20"
+            >
+              <MessageCircle size={18} />
+            </motion.button>
+          </div>
         </div>
       </motion.div>
 
@@ -90,7 +105,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onLogout }) 
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <img
-                    src={conv.avatar || conv.members[0]?.avatar}
+                    src={conv.avatar || conv.members[0]?.avatar || 'https://api.dicebear.com/7.x/shapes/svg?seed=default'}
                     alt={conv.name}
                     className="w-12 h-12 rounded-full object-cover"
                   />
