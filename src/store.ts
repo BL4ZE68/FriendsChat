@@ -143,7 +143,6 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
 // subscription handles
 let _authSubscription: any = null;
-let _messagesSubscription: any = null;
 
 // Listen for supabase auth changes and update store accordingly
 if (SUPABASE_ENABLED) {
@@ -162,30 +161,6 @@ if (SUPABASE_ENABLED) {
     }
   });
   _authSubscription = authListener?.data?.subscription || null;
-
-  // Realtime subscription — sync new messages from other clients
-  const channel = supabase.channel('public:messages');
-  channel.on(
-    'postgres_changes',
-    { event: 'INSERT', schema: 'public', table: 'messages' },
-    (payload: { new: Record<string, any> }) => {
-      const row = payload.new;
-      const msg: Message = {
-        id: row.id,
-        conversationId: row.conversation_id,
-        senderId: row.sender_id,
-        senderName: row.sender_name,
-        senderAvatar: row.sender_avatar,
-        content: row.content,
-        timestamp: new Date(row.inserted_at),
-        isRead: Boolean(row.is_read),
-      };
-      useChatStore.getState().addMessage(msg);
-    },
-  );
-
-  channel.subscribe();
-  _messagesSubscription = channel;
 }
 
 export async function clearSupabaseListeners() {
