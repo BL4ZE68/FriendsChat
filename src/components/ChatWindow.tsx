@@ -65,10 +65,25 @@ export const ChatWindow: React.FC = () => {
       return;
     }
 
-    const filePath = `${selectedConversation.id}/${Date.now()}_${file.name}`;
+    // Client-side validation
+    const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+    const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'application/pdf'];
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      alert('Unsupported file type. Allowed: PNG, JPEG, GIF, PDF.');
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      alert('File is too large. Max 10 MB allowed.');
+      return;
+    }
+
+    // Sanitize filename
+    const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
+    const filePath = `${selectedConversation.id}/${Date.now()}_${sanitized}`;
+
     const { error: uploadError } = await supabase.storage
       .from('uploads')
-      .upload(filePath, file, { cacheControl: '3600', upsert: false });
+      .upload(filePath, file as any, { cacheControl: '3600', upsert: false });
 
     if (uploadError) {
       console.error('upload err', uploadError);
@@ -76,17 +91,37 @@ export const ChatWindow: React.FC = () => {
       return;
     }
 
-    const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(filePath);
-    const publicUrl = urlData.publicUrl;
+    // Prefer signed short-lived URL; fallback to public URL if signed URL fails
+    let fileUrl: string | null = null;
+    try {
+      const { data: signedData, error: signErr } = await supabase.storage
+        .from('uploads')
+        .createSignedUrl(filePath, 60); // 60 seconds
+      if (signErr || !signedData) {
+        const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(filePath);
+        fileUrl = urlData.publicUrl;
+      } else {
+        fileUrl = signedData.signedUrl;
+      }
+    } catch (err) {
+      console.warn('signed url failed, falling back to public url', err);
+      const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(filePath);
+      fileUrl = urlData.publicUrl;
+    }
+
+    if (!fileUrl) {
+      alert('Failed to obtain file URL');
+      return;
+    }
 
     await supabase.from('messages').insert({
       conversation_id: selectedConversation.id,
       sender_id: user.id,
       sender_name: user.name,
       sender_avatar: user.avatar,
-      content: publicUrl,
+      content: fileUrl,
       message_type: 'file',
-      file_name: file.name,
+      file_name: sanitized,
       is_read: true
     });
 

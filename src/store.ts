@@ -127,12 +127,23 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ user: mockUser, isAuthenticated: true });
   },
   logout: async () => {
+    // clear realtime/auth listeners before sign out to avoid leaks
+    try {
+      await clearSupabaseListeners();
+    } catch (e) {
+      console.warn('error clearing listeners during logout', e);
+    }
+
     if (SUPABASE_ENABLED) {
       await supabase.auth.signOut();
     }
     set({ user: null, isAuthenticated: false });
   }
 }));
+
+// subscription handles
+let _authSubscription: any = null;
+let _messagesSubscription: any = null;
 
 // Listen for supabase auth changes and update store accordingly
 if (SUPABASE_ENABLED) {
@@ -143,36 +154,64 @@ if (SUPABASE_ENABLED) {
     }
   });
 
-  supabase.auth.onAuthStateChange((_event: string, session: { user: SupabaseAuthUser } | null) => {
+  const authListener = supabase.auth.onAuthStateChange((_event: string, session: { user: SupabaseAuthUser } | null) => {
     if (session?.user) {
       useAuthStore.setState({ user: mapSupabaseUser(session.user), isAuthenticated: true });
     } else {
       useAuthStore.setState({ user: null, isAuthenticated: false });
     }
   });
+  _authSubscription = authListener?.data?.subscription || null;
 
   // Realtime subscription — sync new messages from other clients
-  supabase
-    .channel('public:messages')
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'messages' },
-      (payload: { new: Record<string, any> }) => {
-        const row = payload.new;
-        const msg: Message = {
-          id: row.id,
-          conversationId: row.conversation_id,
-          senderId: row.sender_id,
-          senderName: row.sender_name,
-          senderAvatar: row.sender_avatar,
-          content: row.content,
-          timestamp: new Date(row.inserted_at),
-          isRead: Boolean(row.is_read),
-        };
-        useChatStore.getState().addMessage(msg);
-      },
-    )
-    .subscribe();
+  const channel = supabase.channel('public:messages');
+  channel.on(
+    'postgres_changes',
+    { event: 'INSERT', schema: 'public', table: 'messages' },
+    (payload: { new: Record<string, any> }) => {
+      const row = payload.new;
+      const msg: Message = {
+        id: row.id,
+        conversationId: row.conversation_id,
+        senderId: row.sender_id,
+        senderName: row.sender_name,
+        senderAvatar: row.sender_avatar,
+        content: row.content,
+        timestamp: new Date(row.inserted_at),
+        isRead: Boolean(row.is_read),
+      };
+      useChatStore.getState().addMessage(msg);
+    },
+  );
+
+  channel.subscribe();
+  _messagesSubscription = channel;
+}
+
+export async function clearSupabaseListeners() {
+  try {
+    if (_messagesSubscription) {
+      try {
+        // supabase v2: remove channel
+        await supabase.removeChannel(_messagesSubscription);
+      } catch (e) {
+        // fallback if removeChannel unavailable
+        try { _messagesSubscription.unsubscribe && _messagesSubscription.unsubscribe(); } catch (e2) {}
+      }
+      _messagesSubscription = null;
+    }
+
+    if (_authSubscription) {
+      try {
+        _authSubscription.unsubscribe && _authSubscription.unsubscribe();
+      } catch (e) {
+        // ignore
+      }
+      _authSubscription = null;
+    }
+  } catch (err) {
+    console.warn('Error clearing Supabase listeners', err);
+  }
 }
 
 export const useChatStore = create<ChatStore>((set) => ({

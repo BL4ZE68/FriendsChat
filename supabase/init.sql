@@ -41,25 +41,46 @@ create table if not exists conversation_members (
 );
 
 -- Row Level Security (RLS) policies
--- NOTE: SELECT policies are permissive for development. Once the app properly
--- manages conversation_members rows, tighten SELECT to check membership.
+-- Restrict SELECT to conversation members only. INSERT is allowed only when
+-- the actor is authenticated and sender_id matches auth.uid().
 
 alter table messages enable row level security;
-create policy "allow_authenticated_select" on messages
-  for select using (auth.role() = 'authenticated');
-create policy "allow_authenticated_insert" on messages
-  for insert with check (auth.role() = 'authenticated' and (sender_id = auth.uid() or sender_id is null));
+-- Allow SELECT only if the requesting user is a member of the conversation
+create policy "select_for_members_only" on messages
+  for select using (
+    exists (
+      select 1 from conversation_members cm
+      where cm.conversation_id = messages.conversation_id
+        and cm.user_id = auth.uid()
+    )
+  );
+
+-- Allow INSERT only when sender_id matches the authenticated user.
+create policy "insert_limited_to_sender" on messages
+  for insert with check (
+    auth.role() = 'authenticated' and (sender_id = auth.uid())
+  );
 
 alter table conversations enable row level security;
-create policy "allow_authenticated_select_conversations" on conversations
-  for select using (auth.role() = 'authenticated');
-create policy "allow_authenticated_insert_conversations" on conversations
+create policy "select_conversations_for_members" on conversations
+  for select using (
+    exists (
+      select 1 from conversation_members cm
+      where cm.conversation_id = conversations.id
+        and cm.user_id = auth.uid()
+    )
+  );
+create policy "insert_conversations_authenticated" on conversations
   for insert with check (auth.role() = 'authenticated');
 
 alter table conversation_members enable row level security;
-create policy "allow_authenticated_select_members" on conversation_members
-  for select using (auth.role() = 'authenticated');
-create policy "allow_authenticated_insert_members" on conversation_members
+-- Allow users to see rows where they are the member
+create policy "select_members_for_self" on conversation_members
+  for select using (
+    cm.user_id = auth.uid()
+  );
+-- Allow insert only for authenticated users (extra checks can be added to ensure conversation creation flow writes members atomically)
+create policy "insert_members_authenticated" on conversation_members
   for insert with check (auth.role() = 'authenticated');
 
 -- Realtime: enable the messages table so INSERT events are broadcast to clients.
