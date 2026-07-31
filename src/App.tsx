@@ -122,7 +122,7 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-purple-200/30 via-pink-200/30 to-red-200/30">
+    <div className="flex flex-col md:flex-row h-screen bg-gradient-to-br from-purple-200/30 via-pink-200/30 to-red-200/30">
       <ConversationList onLogout={() => logout()} onNewConversation={() => setIsModalOpen(true)} onDirectStart={() => setIsDirectOpen(true)} />
       <div className="flex-1 flex flex-col">
         <ChatWindow />

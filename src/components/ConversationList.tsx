@@ -17,7 +17,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onLogout, on
     <motion.div
       initial={{ x: -300 }}
       animate={{ x: 0 }}
-      className="w-full md:w-80 bg-gradient-to-b from-purple-500/10 to-pink-500/10 border-r border-white/20 flex flex-col h-full"
+      className="w-full md:w-80 bg-gradient-to-b from-purple-500/10 to-pink-500/10 border-r border-white/20 flex flex-col md:h-full h-48"
     >
       {/* Header */}
       <motion.div className="p-4 border-b border-white/20">
